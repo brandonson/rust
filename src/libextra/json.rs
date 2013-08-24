@@ -19,8 +19,8 @@
 use std::iterator;
 use std::float;
 use std::hashmap::HashMap;
-use std::io::WriterUtil;
-use std::io;
+use std::rt::io::extensions::{WriterByteConversions,ReaderUtil};
+use std::rt;
 use std::str;
 use std::to_str;
 
@@ -83,20 +83,20 @@ fn spaces(n: uint) -> ~str {
 }
 
 /// A structure for implementing serialization to JSON.
-pub struct Encoder {
-    priv wr: @io::Writer,
+pub struct Encoder<'self> {
+    priv wr: &'self mut rt::io::Writer,
 }
 
 /// Creates a new JSON encoder whose output will be written to the writer
 /// specified.
-pub fn Encoder(wr: @io::Writer) -> Encoder {
+pub fn Encoder<'a>(wr: &'a rt::io::Writer) -> Encoder<'a> {
     Encoder {
         wr: wr
     }
 }
 
-impl serialize::Encoder for Encoder {
-    fn emit_nil(&mut self) { self.wr.write_str("null") }
+impl<'self> serialize::Encoder for Encoder<'self> {
+    fn emit_nil(&mut self) { self.emit_str("null") }
 
     fn emit_uint(&mut self, v: uint) { self.emit_float(v as float); }
     fn emit_u64(&mut self, v: u64) { self.emit_float(v as float); }
@@ -112,46 +112,46 @@ impl serialize::Encoder for Encoder {
 
     fn emit_bool(&mut self, v: bool) {
         if v {
-            self.wr.write_str("true");
+            self.emit_str("true");
         } else {
-            self.wr.write_str("false");
+            self.emit_str("false");
         }
     }
 
     fn emit_f64(&mut self, v: f64) { self.emit_float(v as float); }
     fn emit_f32(&mut self, v: f32) { self.emit_float(v as float); }
     fn emit_float(&mut self, v: float) {
-        self.wr.write_str(float::to_str_digits(v, 6u));
+        self.emit_str(float::to_str_digits(v, 6u));
     }
 
     fn emit_char(&mut self, v: char) { self.emit_str(str::from_char(v)) }
-    fn emit_str(&mut self, v: &str) { self.wr.write_str(escape_str(v)) }
+    fn emit_str(&mut self, v: &str) { self.wr.write(escape_str(v).as_bytes()) }
 
-    fn emit_enum(&mut self, _name: &str, f: &fn(&mut Encoder)) { f(self) }
+    fn emit_enum(&mut self, _name: &str, f: &fn(&mut Encoder<'self>)) { f(self) }
 
     fn emit_enum_variant(&mut self,
                          name: &str,
                          _id: uint,
                          cnt: uint,
-                         f: &fn(&mut Encoder)) {
+                         f: &fn(&mut Encoder<'self>)) {
         // enums are encoded as strings or vectors:
         // Bunny => "Bunny"
         // Kangaroo(34,"William") => ["Kangaroo",[34,"William"]]
 
         if cnt == 0 {
-            self.wr.write_str(escape_str(name));
+            self.emit_str(escape_str(name));
         } else {
-            self.wr.write_char('[');
-            self.wr.write_str(escape_str(name));
-            self.wr.write_char(',');
+            self.emit_char('[');
+            self.emit_str(escape_str(name));
+            self.emit_char(',');
             f(self);
-            self.wr.write_char(']');
+            self.emit_char(']');
         }
     }
 
-    fn emit_enum_variant_arg(&mut self, idx: uint, f: &fn(&mut Encoder)) {
+    fn emit_enum_variant_arg(&mut self, idx: uint, f: &fn(&mut Encoder<'self>)) {
         if idx != 0 {
-            self.wr.write_char(',');
+            self.emit_char(',');
         }
         f(self);
     }
@@ -160,101 +160,101 @@ impl serialize::Encoder for Encoder {
                                 name: &str,
                                 id: uint,
                                 cnt: uint,
-                                f: &fn(&mut Encoder)) {
+                                f: &fn(&mut Encoder<'self>)) {
         self.emit_enum_variant(name, id, cnt, f)
     }
 
     fn emit_enum_struct_variant_field(&mut self,
                                       _: &str,
                                       idx: uint,
-                                      f: &fn(&mut Encoder)) {
+                                      f: &fn(&mut Encoder<'self>)) {
         self.emit_enum_variant_arg(idx, f)
     }
 
-    fn emit_struct(&mut self, _: &str, _: uint, f: &fn(&mut Encoder)) {
-        self.wr.write_char('{');
+    fn emit_struct(&mut self, _: &str, _: uint, f: &fn(&mut Encoder<'self>)) {
+        self.emit_char('{');
         f(self);
-        self.wr.write_char('}');
+        self.emit_char('}');
     }
 
     fn emit_struct_field(&mut self,
                          name: &str,
                          idx: uint,
-                         f: &fn(&mut Encoder)) {
-        if idx != 0 { self.wr.write_char(','); }
-        self.wr.write_str(escape_str(name));
-        self.wr.write_char(':');
+                         f: &fn(&mut Encoder<'self>)) {
+        if idx != 0 { self.emit_char(','); }
+        self.emit_str(escape_str(name));
+        self.emit_char(':');
         f(self);
     }
 
-    fn emit_tuple(&mut self, len: uint, f: &fn(&mut Encoder)) {
+    fn emit_tuple(&mut self, len: uint, f: &fn(&mut Encoder<'self>)) {
         self.emit_seq(len, f)
     }
-    fn emit_tuple_arg(&mut self, idx: uint, f: &fn(&mut Encoder)) {
+    fn emit_tuple_arg(&mut self, idx: uint, f: &fn(&mut Encoder<'self>)) {
         self.emit_seq_elt(idx, f)
     }
 
     fn emit_tuple_struct(&mut self,
                          _name: &str,
                          len: uint,
-                         f: &fn(&mut Encoder)) {
+                         f: &fn(&mut Encoder<'self>)) {
         self.emit_seq(len, f)
     }
-    fn emit_tuple_struct_arg(&mut self, idx: uint, f: &fn(&mut Encoder)) {
+    fn emit_tuple_struct_arg(&mut self, idx: uint, f: &fn(&mut Encoder<'self>)) {
         self.emit_seq_elt(idx, f)
     }
 
-    fn emit_option(&mut self, f: &fn(&mut Encoder)) { f(self); }
+    fn emit_option(&mut self, f: &fn(&mut Encoder<'self>)) { f(self); }
     fn emit_option_none(&mut self) { self.emit_nil(); }
-    fn emit_option_some(&mut self, f: &fn(&mut Encoder)) { f(self); }
+    fn emit_option_some(&mut self, f: &fn(&mut Encoder<'self>)) { f(self); }
 
-    fn emit_seq(&mut self, _len: uint, f: &fn(&mut Encoder)) {
-        self.wr.write_char('[');
+    fn emit_seq(&mut self, _len: uint, f: &fn(&mut Encoder<'self>)) {
+        self.emit_char('[');
         f(self);
-        self.wr.write_char(']');
+        self.emit_char(']');
     }
 
-    fn emit_seq_elt(&mut self, idx: uint, f: &fn(&mut Encoder)) {
+    fn emit_seq_elt(&mut self, idx: uint, f: &fn(&mut Encoder<'self>)) {
         if idx != 0 {
-            self.wr.write_char(',');
+            self.emit_char(',');
         }
         f(self)
     }
 
-    fn emit_map(&mut self, _len: uint, f: &fn(&mut Encoder)) {
-        self.wr.write_char('{');
+    fn emit_map(&mut self, _len: uint, f: &fn(&mut Encoder<'self>)) {
+        self.emit_char('{');
         f(self);
-        self.wr.write_char('}');
+        self.emit_char('}');
     }
 
-    fn emit_map_elt_key(&mut self, idx: uint, f: &fn(&mut Encoder)) {
-        if idx != 0 { self.wr.write_char(','); }
+    fn emit_map_elt_key(&mut self, idx: uint, f: &fn(&mut Encoder<'self>)) {
+        if idx != 0 { self.emit_char(','); }
         f(self)
     }
 
-    fn emit_map_elt_val(&mut self, _idx: uint, f: &fn(&mut Encoder)) {
-        self.wr.write_char(':');
+    fn emit_map_elt_val(&mut self, _idx: uint, f: &fn(&mut Encoder<'self>)) {
+        self.emit_char(':');
         f(self)
     }
 }
 
 /// Another encoder for JSON, but prints out human-readable JSON instead of
 /// compact data
-pub struct PrettyEncoder {
-    priv wr: @io::Writer,
+pub struct PrettyEncoder<'self> {
+    priv wr: &'self mut rt::io::Writer,
     priv indent: uint,
 }
 
 /// Creates a new encoder whose output will be written to the specified writer
-pub fn PrettyEncoder(wr: @io::Writer) -> PrettyEncoder {
+pub fn PrettyEncoder<'a>(wr: &'a rt::io::Writer) -> PrettyEncoder<'a> {
     PrettyEncoder {
         wr: wr,
         indent: 0,
     }
 }
 
-impl serialize::Encoder for PrettyEncoder {
-    fn emit_nil(&mut self) { self.wr.write_str("null") }
+impl<'self> serialize::Encoder for PrettyEncoder<'self> {
+    fn emit_nil(&mut self) { self.emit_str("null") }
 
     fn emit_uint(&mut self, v: uint) { self.emit_float(v as float); }
     fn emit_u64(&mut self, v: u64) { self.emit_float(v as float); }
@@ -270,22 +270,22 @@ impl serialize::Encoder for PrettyEncoder {
 
     fn emit_bool(&mut self, v: bool) {
         if v {
-            self.wr.write_str("true");
+            self.emit_str("true");
         } else {
-            self.wr.write_str("false");
+            self.emit_str("false");
         }
     }
 
     fn emit_f64(&mut self, v: f64) { self.emit_float(v as float); }
     fn emit_f32(&mut self, v: f32) { self.emit_float(v as float); }
     fn emit_float(&mut self, v: float) {
-        self.wr.write_str(float::to_str_digits(v, 6u));
+        self.emit_str(float::to_str_digits(v, 6u));
     }
 
     fn emit_char(&mut self, v: char) { self.emit_str(str::from_char(v)) }
-    fn emit_str(&mut self, v: &str) { self.wr.write_str(escape_str(v)); }
+    fn emit_str(&mut self, v: &str) { self.emit_str(escape_str(v)); }
 
-    fn emit_enum(&mut self, _name: &str, f: &fn(&mut PrettyEncoder)) {
+    fn emit_enum(&mut self, _name: &str, f: &fn(&mut PrettyEncoder<'self>)) {
         f(self)
     }
 
@@ -293,31 +293,31 @@ impl serialize::Encoder for PrettyEncoder {
                          name: &str,
                          _: uint,
                          cnt: uint,
-                         f: &fn(&mut PrettyEncoder)) {
+                         f: &fn(&mut PrettyEncoder<'self>)) {
         if cnt == 0 {
-            self.wr.write_str(escape_str(name));
+            self.emit_str(escape_str(name));
         } else {
-            self.wr.write_char('[');
+            self.emit_char('[');
             self.indent += 2;
-            self.wr.write_char('\n');
-            self.wr.write_str(spaces(self.indent));
-            self.wr.write_str(escape_str(name));
-            self.wr.write_str(",\n");
+            self.emit_char('\n');
+            self.emit_str(spaces(self.indent));
+            self.emit_str(escape_str(name));
+            self.emit_str(",\n");
             f(self);
-            self.wr.write_char('\n');
+            self.emit_char('\n');
             self.indent -= 2;
-            self.wr.write_str(spaces(self.indent));
-            self.wr.write_char(']');
+            self.emit_str(spaces(self.indent));
+            self.emit_char(']');
         }
     }
 
     fn emit_enum_variant_arg(&mut self,
                              idx: uint,
-                             f: &fn(&mut PrettyEncoder)) {
+                             f: &fn(&mut PrettyEncoder<'self>)) {
         if idx != 0 {
-            self.wr.write_str(",\n");
+            self.emit_str(",\n");
         }
-        self.wr.write_str(spaces(self.indent));
+        self.emit_str(spaces(self.indent));
         f(self)
     }
 
@@ -325,14 +325,14 @@ impl serialize::Encoder for PrettyEncoder {
                                 name: &str,
                                 id: uint,
                                 cnt: uint,
-                                f: &fn(&mut PrettyEncoder)) {
+                                f: &fn(&mut PrettyEncoder<'self>)) {
         self.emit_enum_variant(name, id, cnt, f)
     }
 
     fn emit_enum_struct_variant_field(&mut self,
                                       _: &str,
                                       idx: uint,
-                                      f: &fn(&mut PrettyEncoder)) {
+                                      f: &fn(&mut PrettyEncoder<'self>)) {
         self.emit_enum_variant_arg(idx, f)
     }
 
@@ -340,108 +340,108 @@ impl serialize::Encoder for PrettyEncoder {
     fn emit_struct(&mut self,
                    _: &str,
                    len: uint,
-                   f: &fn(&mut PrettyEncoder)) {
+                   f: &fn(&mut PrettyEncoder<'self>)) {
         if len == 0 {
-            self.wr.write_str("{}");
+            self.emit_str("{}");
         } else {
-            self.wr.write_char('{');
+            self.emit_char('{');
             self.indent += 2;
             f(self);
-            self.wr.write_char('\n');
+            self.emit_char('\n');
             self.indent -= 2;
-            self.wr.write_str(spaces(self.indent));
-            self.wr.write_char('}');
+            self.emit_str(spaces(self.indent));
+            self.emit_char('}');
         }
     }
 
     fn emit_struct_field(&mut self,
                          name: &str,
                          idx: uint,
-                         f: &fn(&mut PrettyEncoder)) {
+                         f: &fn(&mut PrettyEncoder<'self>)) {
         if idx == 0 {
-            self.wr.write_char('\n');
+            self.emit_char('\n');
         } else {
-            self.wr.write_str(",\n");
+            self.emit_str(",\n");
         }
-        self.wr.write_str(spaces(self.indent));
-        self.wr.write_str(escape_str(name));
-        self.wr.write_str(": ");
+        self.emit_str(spaces(self.indent));
+        self.emit_str(escape_str(name));
+        self.emit_str(": ");
         f(self);
     }
 
-    fn emit_tuple(&mut self, len: uint, f: &fn(&mut PrettyEncoder)) {
+    fn emit_tuple(&mut self, len: uint, f: &fn(&mut PrettyEncoder<'self>)) {
         self.emit_seq(len, f)
     }
-    fn emit_tuple_arg(&mut self, idx: uint, f: &fn(&mut PrettyEncoder)) {
+    fn emit_tuple_arg(&mut self, idx: uint, f: &fn(&mut PrettyEncoder<'self>)) {
         self.emit_seq_elt(idx, f)
     }
 
     fn emit_tuple_struct(&mut self,
                          _: &str,
                          len: uint,
-                         f: &fn(&mut PrettyEncoder)) {
+                         f: &fn(&mut PrettyEncoder<'self>)) {
         self.emit_seq(len, f)
     }
     fn emit_tuple_struct_arg(&mut self,
                              idx: uint,
-                             f: &fn(&mut PrettyEncoder)) {
+                             f: &fn(&mut PrettyEncoder<'self>)) {
         self.emit_seq_elt(idx, f)
     }
 
-    fn emit_option(&mut self, f: &fn(&mut PrettyEncoder)) { f(self); }
+    fn emit_option(&mut self, f: &fn(&mut PrettyEncoder<'self>)) { f(self); }
     fn emit_option_none(&mut self) { self.emit_nil(); }
-    fn emit_option_some(&mut self, f: &fn(&mut PrettyEncoder)) { f(self); }
+    fn emit_option_some(&mut self, f: &fn(&mut PrettyEncoder<'self>)) { f(self); }
 
-    fn emit_seq(&mut self, len: uint, f: &fn(&mut PrettyEncoder)) {
+    fn emit_seq(&mut self, len: uint, f: &fn(&mut PrettyEncoder<'self>)) {
         if len == 0 {
-            self.wr.write_str("[]");
+            self.emit_str("[]");
         } else {
-            self.wr.write_char('[');
+            self.emit_char('[');
             self.indent += 2;
             f(self);
-            self.wr.write_char('\n');
+            self.emit_char('\n');
             self.indent -= 2;
-            self.wr.write_str(spaces(self.indent));
-            self.wr.write_char(']');
+            self.emit_str(spaces(self.indent));
+            self.emit_char(']');
         }
     }
 
-    fn emit_seq_elt(&mut self, idx: uint, f: &fn(&mut PrettyEncoder)) {
+    fn emit_seq_elt(&mut self, idx: uint, f: &fn(&mut PrettyEncoder<'self>)) {
         if idx == 0 {
-            self.wr.write_char('\n');
+            self.emit_char('\n');
         } else {
-            self.wr.write_str(",\n");
+            self.emit_str(",\n");
         }
-        self.wr.write_str(spaces(self.indent));
+        self.emit_str(spaces(self.indent));
         f(self)
     }
 
-    fn emit_map(&mut self, len: uint, f: &fn(&mut PrettyEncoder)) {
+    fn emit_map(&mut self, len: uint, f: &fn(&mut PrettyEncoder<'self>)) {
         if len == 0 {
-            self.wr.write_str("{}");
+            self.emit_str("{}");
         } else {
-            self.wr.write_char('{');
+            self.emit_char('{');
             self.indent += 2;
             f(self);
-            self.wr.write_char('\n');
+            self.emit_char('\n');
             self.indent -= 2;
-            self.wr.write_str(spaces(self.indent));
-            self.wr.write_char('}');
+            self.emit_str(spaces(self.indent));
+            self.emit_char('}');
         }
     }
 
-    fn emit_map_elt_key(&mut self, idx: uint, f: &fn(&mut PrettyEncoder)) {
+    fn emit_map_elt_key(&mut self, idx: uint, f: &fn(&mut PrettyEncoder<'self>)) {
         if idx == 0 {
-            self.wr.write_char('\n');
+            self.emit_char('\n');
         } else {
-            self.wr.write_str(",\n");
+            self.emit_str(",\n");
         }
-        self.wr.write_str(spaces(self.indent));
+        self.emit_str(spaces(self.indent));
         f(self);
     }
 
-    fn emit_map_elt_val(&mut self, _idx: uint, f: &fn(&mut PrettyEncoder)) {
-        self.wr.write_str(": ");
+    fn emit_map_elt_val(&mut self, _idx: uint, f: &fn(&mut PrettyEncoder<'self>)) {
+        self.emit_str(": ");
         f(self);
     }
 }
@@ -461,21 +461,22 @@ impl<E: serialize::Encoder> serialize::Encodable<E> for Json {
 
 impl Json{
     /// Encodes a json value into a io::writer.  Uses a single line.
-    pub fn to_writer(&self, wr: @io::Writer) {
+    pub fn to_writer(&self, wr: &rt::io::Writer) {
         let mut encoder = Encoder(wr);
         self.encode(&mut encoder)
     }
 
     /// Encodes a json value into a io::writer.
     /// Pretty-prints in a more readable format.
-    pub fn to_pretty_writer(&self, wr: @io::Writer) {
+    pub fn to_pretty_writer(&self, wr: &rt::io::Writer) {
         let mut encoder = PrettyEncoder(wr);
         self.encode(&mut encoder)
     }
 
     /// Encodes a json value into a string
     pub fn to_pretty_str(&self) -> ~str {
-        io::with_str_writer(|wr| self.to_pretty_writer(wr))
+        str::from_bytes(
+	    rt::io::mem::with_mem_writer(|wr| self.to_pretty_writer(wr as &rt::io::Writer)))
     }
 }
 
@@ -853,9 +854,9 @@ impl<T : iterator::Iterator<char>> Parser<T> {
     }
 }
 
-/// Decodes a json value from an @io::Reader
-pub fn from_reader(rdr: @io::Reader) -> Result<Json, Error> {
-    let s = str::from_bytes(rdr.read_whole_stream());
+/// Decodes a json value from an &rt::io::Reader
+pub fn from_reader<T: rt::io::Reader> (rdr: T) -> Result<Json, Error> {
+    let s = str::from_bytes(rdr.read_to_end());
     let mut parser = Parser(~s.iter());
     parser.parse()
 }
@@ -1307,7 +1308,8 @@ impl<A:ToJson> ToJson for Option<A> {
 impl to_str::ToStr for Json {
     /// Encodes a json value into a string
     fn to_str(&self) -> ~str {
-      io::with_str_writer(|wr| self.to_writer(wr))
+      str::from_bytes(
+          rt::io::mem::with_mem_writer(|wr| self.to_writer(wr as &rt::io::Writer)))
     }
 }
 
@@ -1498,14 +1500,14 @@ mod tests {
     fn test_write_enum() {
         let animal = Dog;
         assert_eq!(
-            do io::with_str_writer |wr| {
+            do rt::io::mem::with_mem_writer |wr| {
                 let mut encoder = Encoder(wr);
                 animal.encode(&mut encoder);
             },
             ~"\"Dog\""
         );
         assert_eq!(
-            do io::with_str_writer |wr| {
+            do rt::io::mem::with_mem_writer |wr| {
                 let mut encoder = PrettyEncoder(wr);
                 animal.encode(&mut encoder);
             },
@@ -1514,14 +1516,14 @@ mod tests {
 
         let animal = Frog(~"Henry", 349);
         assert_eq!(
-            do io::with_str_writer |wr| {
+            do rt::io::mem::with_mem_writer |wr| {
                 let mut encoder = Encoder(wr);
                 animal.encode(&mut encoder);
             },
             ~"[\"Frog\",\"Henry\",349]"
         );
         assert_eq!(
-            do io::with_str_writer |wr| {
+            do rt::io::mem::with_mem_writer |wr| {
                 let mut encoder = PrettyEncoder(wr);
                 animal.encode(&mut encoder);
             },
@@ -1537,14 +1539,14 @@ mod tests {
     #[test]
     fn test_write_some() {
         let value = Some(~"jodhpurs");
-        let s = do io::with_str_writer |wr| {
+        let s = do rt::io::mem::with_mem_writer |wr| {
             let mut encoder = Encoder(wr);
             value.encode(&mut encoder);
         };
         assert_eq!(s, ~"\"jodhpurs\"");
 
         let value = Some(~"jodhpurs");
-        let s = do io::with_str_writer |wr| {
+        let s = do rt::io::mem::with_mem_writer |wr| {
             let mut encoder = PrettyEncoder(wr);
             value.encode(&mut encoder);
         };
@@ -1554,13 +1556,13 @@ mod tests {
     #[test]
     fn test_write_none() {
         let value: Option<~str> = None;
-        let s = do io::with_str_writer |wr| {
+        let s = do rt::io::mem::with_mem_writer |wr| {
             let mut encoder = Encoder(wr);
             value.encode(&mut encoder);
         };
         assert_eq!(s, ~"null");
 
-        let s = do io::with_str_writer |wr| {
+        let s = do rt::io::mem::with_mem_writer |wr| {
             let mut encoder = Encoder(wr);
             value.encode(&mut encoder);
         };

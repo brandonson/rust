@@ -196,7 +196,9 @@ struct Work<'self, T> {
     res: Option<Either<T,PortOne<(Exec,T)>>>
 }
 
-fn json_encode<T:Encodable<json::Encoder>>(t: &T) -> ~str {
+//FIXME #8579: causes ICE
+//FIXME #6551
+fn json_encode<T:Encodable<json::Encoder<'self>>(t: &T) -> ~str {
     do io::with_str_writer |wr| {
         let mut encoder = json::Encoder(wr);
         t.encode(&mut encoder);
@@ -212,7 +214,9 @@ fn json_decode<T:Decodable<json::Decoder>>(s: &str) -> T {
     }
 }
 
-fn digest<T:Encodable<json::Encoder>>(t: &T) -> ~str {
+//FIXME #8579: See json_encode above
+//FIXME #6551
+fn digest<T:Encodable<json::Encoder<'self>>(t: &T) -> ~str {
     let mut sha = ~Sha1::new();
     (*sha).input_str(json_encode(t));
     (*sha).result_str()
@@ -295,15 +299,17 @@ impl<'self> Prep<'self> {
     }
 
     fn exec<T:Send +
-        Encodable<json::Encoder> +
-        Decodable<json::Decoder>>(
+        Encodable<E> +
+        Decodable<json::Decoder>, 
+        E: Encoder>(
             &'self self, blk: ~fn(&Exec) -> T) -> T {
         self.exec_work(blk).unwrap()
     }
 
     fn exec_work<T:Send +
-        Encodable<json::Encoder> +
-        Decodable<json::Decoder>>( // FIXME(#5121)
+        Encodable<E> +
+        Decodable<json::Decoder>,
+        E: Encoder>( // FIXME(#5121)
             &'self self, blk: ~fn(&Exec) -> T) -> Work<'self, T> {
         let mut bo = Some(blk);
 
@@ -341,8 +347,9 @@ impl<'self> Prep<'self> {
 }
 
 impl<'self, T:Send +
-       Encodable<json::Encoder> +
-       Decodable<json::Decoder>>
+       Encodable<E> +
+       Decodable<json::Decoder>,
+       E: Encoder>
     Work<'self, T> { // FIXME(#5121)
 
     pub fn new(p: &'self Prep<'self>, e: Either<T,PortOne<(Exec,T)>>) -> Work<'self, T> {

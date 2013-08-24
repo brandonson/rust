@@ -471,6 +471,9 @@ pub mod flatteners {
         fn from_writer(w: @Writer) -> Self;
     }
 
+    //No longer works due to json now using rt::io
+    //Update when this module changes to rt::io as well?
+    /* 
     impl FromReader for json::Decoder {
         fn from_reader(r: @Reader) -> json::Decoder {
             match json::from_reader(r) {
@@ -487,6 +490,7 @@ pub mod flatteners {
             json::Encoder(w)
         }
     }
+    */
 
     impl FromReader for ebml::reader::Decoder {
         fn from_reader(r: @Reader) -> ebml::reader::Decoder {
