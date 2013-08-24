@@ -182,6 +182,12 @@ impl<'self> Seek for BufReader<'self> {
     fn seek(&mut self, _pos: i64, _style: SeekStyle) { fail!() }
 }
 
+pub fn with_mem_writer(writeFn:&fn(&MemWriter)) -> ~[u8] {
+  let writer = MemWriter::new();
+  writeFn(&writer);
+  writer.inner()
+}
+
 #[cfg(test)]
 mod test {
     use prelude::*;
@@ -218,5 +224,11 @@ mod test {
         assert!(reader.eof());
         assert_eq!(reader.read(buf), None);
         assert!(reader.eof());
+    }
+
+    #[test]
+    fn test_with_mem_writer() {
+        let buf = with_mem_writer(|wr| writer.write([1,2,3,4,5,6,7]));
+	assert_eq!(buf, ~[1,2,3,4,5,6,7]);
     }
 }
