@@ -23,7 +23,6 @@ fn f<T: Tr>() {
     //~^ ERROR expected struct, variant or union type, found associated type
     let z = T::A::<u8> {};
     //~^ ERROR expected struct, variant or union type, found associated type
-    //~| ERROR type parameters are not allowed on this type
     match S {
         T::A {} => {}
         //~^ ERROR expected struct, variant or union type, found associated type
@@ -32,7 +31,7 @@ fn f<T: Tr>() {
 
 fn g<T: Tr<A = S>>() {
     let s = T::A {}; // OK
-    let z = T::A::<u8> {}; //~ ERROR type parameters are not allowed on this type
+    let z = T::A::<u8> {};
     match S {
         T::A {} => {} // OK
     }
@@ -41,7 +40,6 @@ fn g<T: Tr<A = S>>() {
 fn main() {
     let s = S::A {}; //~ ERROR ambiguous associated type
     let z = S::A::<u8> {}; //~ ERROR ambiguous associated type
-    //~^ ERROR type parameters are not allowed on this type
     match S {
         S::A {} => {} //~ ERROR ambiguous associated type
     }

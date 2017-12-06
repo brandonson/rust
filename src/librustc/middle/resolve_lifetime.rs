@@ -512,6 +512,15 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                 Some(self.hir_map.get_parent(trait_item.id)),
                 &sig.decl, &trait_item.generics,
                 |this| intravisit::walk_trait_item(this, trait_item))
+        } else if let hir::TraitItemKind::Type(_, _) = trait_item.node {
+            //Only early bound lifetimes here.
+            let mut lt_early_index = self.next_early_index();
+            let lifetimes = trait_item.generics.lifetimes.iter()
+                .map(|lt_def| Region::early(self.hir_map, &mut lt_early_index, lt_def))
+                .collect();
+            let next_early_index = lt_early_index + trait_item.generics.ty_params.len() as u32;
+            let scope = Scope::Binder { lifetimes, next_early_index, s: self.scope };
+            self.with(scope, |_old_scope, this| intravisit::walk_trait_item(this, trait_item))
         } else {
             intravisit::walk_trait_item(self, trait_item);
         }
@@ -523,6 +532,14 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                 Some(self.hir_map.get_parent(impl_item.id)),
                 &sig.decl, &impl_item.generics,
                 |this| intravisit::walk_impl_item(this, impl_item))
+        } else if let hir::ImplItemKind::Type (_) = impl_item.node {
+            let mut lt_early_index = self.next_early_index();
+            let lifetimes = impl_item.generics.lifetimes.iter()
+                .map(|lt_def| Region::early(self.hir_map, &mut lt_early_index, lt_def))
+                .collect();
+            let next_early_index = lt_early_index + impl_item.generics.ty_params.len() as u32;
+            let scope = Scope::Binder { lifetimes, next_early_index, s: self.scope };
+            self.with(scope, |_old_scope, this| intravisit::walk_impl_item(this, impl_item))
         } else {
             intravisit::walk_impl_item(self, impl_item);
         }
