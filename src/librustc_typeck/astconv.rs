@@ -867,6 +867,10 @@ impl<'o, 'gcx: 'tcx, 'tcx> AstConv<'gcx, 'tcx>+'o {
             return tcx.types.err;
         };
 
+        //TODO this probably breaks something to do with bindings...
+        //Also, what on earth is going on with self types here?
+        let item_substs = self.ast_path_substs_for_ty(span, item_def_id, item_segment);
+
         debug!("qpath_to_ty: self_type={:?}", self_ty);
 
         let trait_ref = self.ast_path_to_mono_trait_ref(span,
@@ -876,7 +880,7 @@ impl<'o, 'gcx: 'tcx, 'tcx> AstConv<'gcx, 'tcx>+'o {
 
         debug!("qpath_to_ty: trait_ref={:?}", trait_ref);
 
-        self.normalize_ty(span, tcx.mk_projection(item_def_id, trait_ref.substs))
+        self.normalize_ty(span, tcx.mk_projection(item_def_id, trait_ref.substs).subst(tcx, item_substs))
     }
 
     pub fn prohibit_type_params(&self, segments: &[hir::PathSegment]) {

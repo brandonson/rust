@@ -549,12 +549,12 @@ fn compare_self_type<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
     Ok(())
 }
 
-fn compare_number_of_generics<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
-                                        impl_m: &ty::AssociatedItem,
-                                        impl_m_span: Span,
-                                        trait_m: &ty::AssociatedItem,
-                                        trait_item_span: Option<Span>)
-                                        -> Result<(), ErrorReported> {
+pub fn compare_number_of_generics<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
+                                            impl_m: &ty::AssociatedItem,
+                                            impl_m_span: Span,
+                                            trait_m: &ty::AssociatedItem,
+                                            trait_item_span: Option<Span>)
+                                            -> Result<(), ErrorReported> {
     let impl_m_generics = tcx.generics_of(impl_m.def_id);
     let trait_m_generics = tcx.generics_of(trait_m.def_id);
     let num_impl_m_type_params = impl_m_generics.types.len();

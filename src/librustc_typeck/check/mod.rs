@@ -80,7 +80,7 @@ pub use self::Expectation::*;
 use self::autoderef::Autoderef;
 use self::callee::DeferredCallResolution;
 use self::coercion::{CoerceMany, DynamicCoerceMany};
-pub use self::compare_method::{compare_impl_method, compare_const_impl};
+pub use self::compare_method::{compare_impl_method, compare_const_impl, compare_number_of_generics};
 use self::method::MethodCallee;
 use self::TupleArgumentsFlag::*;
 
@@ -1347,7 +1347,13 @@ fn check_impl_items_against_trait<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                     }
                 }
                 hir::ImplItemKind::Type(_) => {
+                    let trait_span = tcx.hir.span_if_local(ty_trait_item.def_id);
                     if ty_trait_item.kind == ty::AssociatedKind::Type {
+                        let _ = compare_number_of_generics(tcx,
+                                                   &ty_impl_item,
+                                                   impl_item.span,
+                                                   &ty_trait_item,
+                                                   trait_span);
                         if ty_trait_item.defaultness.has_value() {
                             overridden_associated_type = Some(impl_item);
                         }
